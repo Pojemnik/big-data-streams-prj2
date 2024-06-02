@@ -8,4 +8,4 @@ kafka-topics.sh --delete --bootstrap-server ${CLUSTER_NAME}-w-1:9092 --topic prj
 kafka-topics.sh --create --bootstrap-server ${CLUSTER_NAME}-w-1:9092 --replication-factor 1 --partitions 1 --topic prj-2-anomalies
 
 #Remove spark checkpoints
-hadoop fs -rm -r checkpoints
+hadoop fs -rm -r tmp
