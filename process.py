@@ -51,7 +51,7 @@ query = win.writeStream \
 .start()
 
 # Tryb C
-win = data.withWatermark("date", "1 day") \
+win = data.withWatermark("date", "30 days") \
     .groupBy(
         window("date", "30 days"), data.film_id) \
         .agg(count("rate").alias("rate_count"),
@@ -65,7 +65,7 @@ win = win.join(movies, movies.ID == win.film_id) \
 win = win.drop("window", "ID", "Year")
 
 query = win.writeStream \
-.outputMode("update") \
+.outputMode("append") \
 .foreachBatch (
     lambda batchDF, _:
     batchDF.write
