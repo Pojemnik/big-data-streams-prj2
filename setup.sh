@@ -20,10 +20,11 @@ wget https://repo1.maven.org/maven2/com/redislabs/spark-redis_2.12/3.1.0/spark-r
 wget https://repo1.maven.org/maven2/redis/clients/jedis/3.9.0/jedis-3.9.0.jar
 
 #Install redis tools
-sudo apt install redis-tools
+sudo apt-get -y install redis-tools
 
 #Download input data
-hadoop fs -copyToLocal gs://pojemnik/projekt2/sample/* data/
+mkdir ./data
+hadoop fs -copyToLocal gs://pojemnik/projekt2/sample/* ./data/
 
 #Wait for the container to start
 sleep 10
