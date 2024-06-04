@@ -66,10 +66,7 @@ def process_realtime_data(data: DataFrame, movies: DataFrame, host_name: str, mo
         ) \
         .start()
 
-def detect_anomalies(data: DataFrame, movies: DataFrame, host_name: str):
-    anomaly_window_length = 30
-    anomaly_min_rate_count = 2
-    anomaly_min_avg_rate = 3
+def detect_anomalies(data: DataFrame, movies: DataFrame, anomaly_window_length: int, anomaly_min_rate_count: int, anomaly_min_avg_rate, host_name: str):
     anomalies_window = data.withWatermark("date", f"{anomaly_window_length} days") \
     .groupBy(window("date", f"{anomaly_window_length} days", "1 day"), data.film_id) \
     .agg(
@@ -112,7 +109,12 @@ def detect_anomalies(data: DataFrame, movies: DataFrame, host_name: str):
 
 
 def main():
+    if len(sys.argv) < 5:
+        print("Not enough arguments")
     mode = sys.argv[1]
+    anomaly_window_length = int(sys.argv[2])
+    anomaly_min_rate_count = int(sys.argv[3])
+    anomaly_min_avg_rate = int(sys.argv[4])
 
     spark = SparkSession.builder \
     .appName("BigData Netflix") \
@@ -142,7 +144,7 @@ def main():
 
     process_realtime_data(data, movies, host_name, mode)
 
-    detect_anomalies(data, movies, host_name)
+    detect_anomalies(data, movies, anomaly_window_length, anomaly_min_rate_count, anomaly_min_avg_rate, host_name)
 
     spark.streams.awaitAnyTermination()
 
