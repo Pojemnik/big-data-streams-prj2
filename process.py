@@ -124,6 +124,7 @@ def main():
     .format("kafka") \
     .option("kafka.bootstrap.servers", f"{host_name}:9092") \
     .option("subscribe", "prj-2-input") \
+    .option("startingOffsets", "latest") \
     .load()
     data = source.select(expr("CAST(value AS STRING)").alias("value"))
 
