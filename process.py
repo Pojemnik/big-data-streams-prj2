@@ -1,7 +1,7 @@
 import socket
 import sys
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import expr, split, window, count, sum, approx_count_distinct, date_format, col, concat, lit
+from pyspark.sql.functions import expr, split, window, count, sum, approx_count_distinct, date_format, col, concat, lit, to_timestamp
 from pyspark.sql.types import StructType, TimestampType, StringType, IntegerType
 from pyspark.sql import DataFrame
 
@@ -15,7 +15,7 @@ def process_realtime_data(data: DataFrame, movies: DataFrame, host_name: str, mo
                 sum("rate").alias("rate_sum"),
                 approx_count_distinct("user_id").alias("user_count")
             )
-        win = win.withColumn("month", date_format(win.window.start, "MM.yyyy"))
+        win = win.withColumn("month", date_format(win.window.end, "MM.yyyy"))
         win = win.join(movies, movies.ID == win.film_id) \
         .withColumnRenamed("Title", "title") \
         .withColumn("key", concat(col("film_id"), lit(","), col("month")))
@@ -45,7 +45,7 @@ def process_realtime_data(data: DataFrame, movies: DataFrame, host_name: str, mo
                 sum("rate").alias("rate_sum"),
                 approx_count_distinct("user_id").alias("user_count")
             )
-        win = win.withColumn("month", date_format(win.window.start, "MM.yyyy"))
+        win = win.withColumn("month", date_format(win.window.end, "MM.yyyy"))
         win = win.join(movies, movies.ID == win.film_id) \
         .withColumnRenamed("Title", "title") \
         .withColumn("key", concat(col("film_id"), lit(","), col("month")))
@@ -125,6 +125,7 @@ def main():
     .option("kafka.bootstrap.servers", f"{host_name}:9092") \
     .option("subscribe", "prj-2-input") \
     .option("startingOffsets", "latest") \
+    .option("failOnDataLoss", "false") \
     .load()
     data = source.select(expr("CAST(value AS STRING)").alias("value"))
 
@@ -133,7 +134,7 @@ def main():
     #Format and clean input
     split_columns = split(data["value"], ",")
 
-    data = data.withColumn("date", split_columns[0].cast(TimestampType())) \
+    data = data.withColumn("date", to_timestamp(split_columns[0], "yyyy-MM-dd")) \
     .withColumn("film_id", split_columns[1]) \
     .withColumn("user_id", split_columns[2]) \
     .withColumn("rate", split_columns[3].cast(IntegerType()))
