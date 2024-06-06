@@ -1,6 +1,10 @@
 #!/bin/bash
 CLUSTER_NAME=$(/usr/share/google/get_metadata_value attributes/dataproc-cluster-name)
 
+if [[ $# -eq 0 ]]; then
+    $1 = 5
+fi
+
 while true
 do
     keys=`redis-cli -h ${CLUSTER_NAME}-m -p 6379 keys '*'`
@@ -21,6 +25,6 @@ do
             echo "$value" | sed -E 's/^/    /'
         done
     fi
-    sleep 1
+    sleep $1
     echo "--------------------------------"
 done
