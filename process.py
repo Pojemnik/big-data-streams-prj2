@@ -111,10 +111,12 @@ def detect_anomalies(data: DataFrame, movies: DataFrame, anomaly_window_length: 
 def main():
     if len(sys.argv) < 5:
         print("Not enough arguments")
+        return
     mode = sys.argv[1]
     anomaly_window_length = int(sys.argv[2])
     anomaly_min_rate_count = int(sys.argv[3])
     anomaly_min_avg_rate = int(sys.argv[4])
+    print(f"Arguments: {mode}, {anomaly_window_length}, {anomaly_min_rate_count}, {anomaly_min_avg_rate}")
 
     spark = SparkSession.builder \
     .appName("BigData Netflix") \

@@ -24,7 +24,7 @@ sudo apt-get -y install redis-tools
 
 #Download input data
 mkdir ./data
-hadoop fs -copyToLocal gs://pojemnik/projekt2/sample/* ./data/
+hadoop fs -copyToLocal gs://pojemnik/projekt2/netflix-prize-data/* ./data/
 
 #Wait for the container to start
 sleep 10

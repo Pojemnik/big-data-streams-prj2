@@ -1,9 +1,7 @@
 #!/bin/bash
 CLUSTER_NAME=$(/usr/share/google/get_metadata_value attributes/dataproc-cluster-name)
 
-if [[ $# -eq 0 ]]; then
-    $1 = 5
-fi
+delay = ${1:-5}
 
 while true
 do
@@ -25,6 +23,6 @@ do
             echo "$value" | sed -E 's/^/    /'
         done
     fi
-    sleep $1
+    sleep $delay
     echo "--------------------------------"
 done

@@ -19,9 +19,12 @@ gs://goog-dataproc-initialization-actions-${REGION}/kafka/kafka.sh
 
 #### Skrypt inicjujący środowisko
 Skrypt `./setup.sh` przeprowadza całą inicjalizację środowiska, łączenie z tworzeniem miejsc utrzymywania obrazów czasu rzeczywistego i anomalii.
+Przykładowy efektu uruchomienia:
+![](img/setup_result.png)
+W wyniku działania skryptu mogą pojawić się błędy - jak na powyższym screenshocie. Są one wynikiem próby usunięcia dla pewności nieistniejącego tematu Kafki. Można je zignorować.
 
 #### Zasilanie Kafki danymi
-`./producer.sh`
+Zasinie danymi realizowane jest przez skrypt `./producer.sh`. Nie przyjmuje on żadnych argumentów.
 
 ## Utrzymanie obrazu czasu rzeczywistego – tryb A
 ```python
@@ -194,6 +197,15 @@ Argumenty (w kolejności podawania):
 - minimalna liczba ocen dla odnotowania anomalii - `integer` (parametr `L` z opisu projektu)
 - minimalna średnia ocena dla odnotowania anomalii - `integer` (parametr `O` z opisu projektu)
 
+Przykładowe wyjście z `process.sh` - gotowość do pracy:
+![](img/process_ready.png)
+
+Warianty uruchomienia prztwarzania:
+- Wariant 1 - tryb A, anomalie nie występują:
+`./process.sh a 30 2 3`
+- Wariant 2 - tryb C, anomalie występują stosunkowo często:
+`./process.sh a 30 2 3`
+
 ## Miejsce utrzymywania obrazów czasu rzeczywistego – skrypt tworzący
 Miejsce utrzymywania obrazów czasu rzeczywistego jest tworzone przez skrypt `setup.sh`. Nie trzeba uruchamiać go ponownie.
 
@@ -204,8 +216,14 @@ Redis jest bazą danych typu klucz wartość, która wspiera drobnoziarnistą ak
 #### Obrazy czasu rzeczywstego
 Do odczytu danych z obrazów czasu rzeczywistego można zastosować skrypt `reader_realtime.sh`. Odczytuje on cyklicznie dane zapisywane do miejsca utrzymywania (Redisa). Skrypt przyjmuje argument, który określa w sekundach jak często ma następować ponowne odczytanie danych. Domyślna wartość to 5 sekund.
 
+Przykładowy wynik przetwarzania czasu rzeczywistego:
+![](img/realtime_result.png)
+
 #### Wyniki wykrywania anomalii
 Do odczytu wyników wykraywania anomalii stosuje się skrypt `reader_anomalies.sh`.
+
+Przykładowy wynik wykrywania anomalii:
+![](img/anomaly_result.png)
 
 ## Czyszczenie i ponowne uruchomienie projektu
 Przed ponownym uruchomieniem projektu po jego zatrzymaniu należy uruchomić skrypt `reset.sh`. Można rónież użyć `setup.sh`, ale `reset` nie pobiera ponowanie danych wejściowych, bibliotek sparka i nie instaluje klienta Redisa, w związku z czym jest dużo szybszy.
