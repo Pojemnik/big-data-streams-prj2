@@ -1,7 +1,7 @@
 #!/bin/bash
 CLUSTER_NAME=$(/usr/share/google/get_metadata_value attributes/dataproc-cluster-name)
 
-delay = ${1:-5}
+delay=${1:-5}
 
 while true
 do
