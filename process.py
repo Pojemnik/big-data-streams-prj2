@@ -66,8 +66,8 @@ def process_realtime_data(data: DataFrame, movies: DataFrame, host_name: str, mo
         ) \
         .start()
 
-def detect_anomalies(data: DataFrame, movies: DataFrame, anomaly_window_length: int, anomaly_min_rate_count: int, anomaly_min_avg_rate, host_name: str):
-    anomalies_window = data.withWatermark("date", f"{anomaly_window_length} days") \
+def detect_anomalies(data: DataFrame, movies: DataFrame, anomaly_window_length: int, anomaly_min_rate_count: int, anomaly_min_avg_rate: int, host_name: str):
+    anomalies_window = data.withWatermark("date", "1 day") \
     .groupBy(window("date", f"{anomaly_window_length} days", "1 day"), data.film_id) \
     .agg(
         count("rate").alias("rate_count"),

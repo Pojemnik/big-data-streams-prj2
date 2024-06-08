@@ -202,9 +202,9 @@ Przykładowe wyjście z `process.sh` - gotowość do pracy:
 
 Warianty uruchomienia prztwarzania:
 - Wariant 1 - tryb A, anomalie nie występują:
-`./process.sh a 30 2 3`
-- Wariant 2 - tryb C, anomalie występują stosunkowo często:
-`./process.sh a 30 2 3`
+`./process.sh a 30 10 5`
+- Wariant 2 - tryb C, anomalie występują często:
+`./process.sh c 5 2 3`
 
 ## Miejsce utrzymywania obrazów czasu rzeczywistego – skrypt tworzący
 Miejsce utrzymywania obrazów czasu rzeczywistego jest tworzone przez skrypt `setup.sh`. Nie trzeba uruchamiać go ponownie.
