@@ -2,7 +2,7 @@ import socket
 import sys
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import expr, split, window, count, sum, approx_count_distinct, date_format, col, concat, lit, to_timestamp
-from pyspark.sql.types import StructType, TimestampType, StringType, IntegerType
+from pyspark.sql.types import IntegerType
 from pyspark.sql import DataFrame
 
 def process_realtime_data(data: DataFrame, movies: DataFrame, host_name: str, mode: str):
@@ -82,8 +82,8 @@ def detect_anomalies(data: DataFrame, movies: DataFrame, anomaly_window_length: 
     )
 
     anomalies = anomalies_window.where(
-        (anomalies_window.rate_count > anomaly_min_rate_count) &
-        (anomalies_window.avg_rate > anomaly_min_avg_rate)
+        (anomalies_window.rate_count >= anomaly_min_rate_count) &
+        (anomalies_window.avg_rate >= anomaly_min_avg_rate)
     ).join(movies, movies.ID == anomalies_window.film_id) \
     .drop("ID", "Year", "film_id")
 
@@ -105,6 +105,7 @@ def detect_anomalies(data: DataFrame, movies: DataFrame, anomaly_window_length: 
     .option("kafka.bootstrap.servers", f"{host_name}:9092") \
     .option("topic", "prj-2-anomalies") \
     .option("checkpointLocation", "/tmp/anomaly_checkpoints/") \
+    .outputMode("append") \
     .start()
 
 
