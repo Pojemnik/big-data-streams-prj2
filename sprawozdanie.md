@@ -18,13 +18,15 @@ gs://goog-dataproc-initialization-actions-${REGION}/kafka/kafka.sh
 ```
 
 #### Skrypt inicjujący środowisko
+**Uwaga:** Po rozpakowaniu archiwum może być konieczne nadanie skryptom uprawnień do wykonania. Można to zrobić komendą `chmod +x *.sh` w katalogu gdzie rozpakowano projekt.
+
 Skrypt `./setup.sh` przeprowadza całą inicjalizację środowiska, łączenie z tworzeniem miejsc utrzymywania obrazów czasu rzeczywistego i anomalii.
 Przykładowy efektu uruchomienia:
 ![](img/setup_result.png)
 W wyniku działania skryptu mogą pojawić się błędy - jak na powyższym screenshocie. Są one wynikiem próby usunięcia dla pewności nieistniejącego tematu Kafki. Można je zignorować.
 
 #### Zasilanie Kafki danymi
-Zasinie danymi realizowane jest przez skrypt `./producer.sh`. Nie przyjmuje on żadnych argumentów.
+Zasilanie danymi realizowane jest przez skrypt `./producer.sh`. Nie przyjmuje on żadnych argumentów. Skrypt ten wywołuje producenta zaimplementowanego w ramach laboratorium z odpowiednimi argumentami. Kod java producenta jest dołączony do projektu.
 
 ## Utrzymanie obrazu czasu rzeczywistego – transformacje
 ```python
@@ -191,6 +193,8 @@ Warianty uruchomienia prztwarzania:
 - Wariant 2 - tryb C, anomalie występują często:
 `./process.sh c 5 2 3`
 
+**Uwaga:** Na uzyskanie wyników - zwłaszcza w wariancie 2 trzeba zaczekać dłuższą chwilę.
+
 ## Miejsce utrzymywania obrazów czasu rzeczywistego – skrypt tworzący
 Miejsce utrzymywania obrazów czasu rzeczywistego jest tworzone przez skrypt `setup.sh`. Nie trzeba uruchamiać go ponownie.
 
@@ -199,7 +203,7 @@ Do przechowywania obrazów czasu rzeczywistego wybrano bazę Redis. Jest to baza
 
 ## Konsument: skrypt odczytujący wyniki przetwarzania
 #### Obrazy czasu rzeczywstego
-Do odczytu danych z obrazów czasu rzeczywistego można zastosować skrypt `reader_realtime.sh`. Odczytuje on cyklicznie dane zapisywane do miejsca utrzymywania (Redisa). Skrypt przyjmuje argument, który określa w sekundach jak często ma następować ponowne odczytanie danych. Domyślna wartość to 5 sekund.
+Do odczytu danych z obrazów czasu rzeczywistego można zastosować skrypt `reader_realtime.sh`. Odczytuje on cyklicznie dane z miejsca utrzymywania (Redisa). Skrypt przyjmuje argument, który określa w sekundach jak często ma następować ponowne odczytanie danych. Domyślna wartość to 5 sekund.
 
 Przykładowy wynik przetwarzania czasu rzeczywistego:
 ![](img/realtime_result.png)
