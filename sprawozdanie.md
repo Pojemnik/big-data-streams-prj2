@@ -26,7 +26,7 @@ W wyniku działania skryptu mogą pojawić się błędy - jak na powyższym scre
 #### Zasilanie Kafki danymi
 Zasinie danymi realizowane jest przez skrypt `./producer.sh`. Nie przyjmuje on żadnych argumentów.
 
-## Utrzymanie obrazu czasu rzeczywistego – tryb A
+## Utrzymanie obrazu czasu rzeczywistego – transformacje
 ```python
 #Wczytywanie danych
 #Oceny
@@ -50,33 +50,34 @@ data = data.withColumn("date", to_timestamp(split_columns[0], "yyyy-MM-dd")) \
 .withColumn("user_id", split_columns[2]) \
 .withColumn("rate", split_columns[3].cast(IntegerType()))
 data = data.drop("value")
-
 #Wyliczenie agregat
-win = data.groupBy(
+win = data.withWatermark("date", "1 day") \
+.groupBy(
     window("date", "30 days"), data.film_id) \
-    .agg(
-        count("rate").alias("rate_count"),
-        sum("rate").alias("rate_sum"),
-        approx_count_distinct("user_id").alias("user_count")
-    )
-win = win.withColumn("month", date_format(win.window.end, "MM.yyyy"))
+.agg(
+    count("rate").alias("rate_count"),
+    sum("rate").alias("rate_sum"),
+    approx_count_distinct("user_id").alias("user_count")
+)
 
-#Dołączenie danych o filmach, wyznaczenie kolumny klucza dla Redisa
-win = win.join(movies, movies.ID == win.film_id) \
-    .withColumnRenamed("Title", "title") \
-    .withColumn("key", concat(col("film_id"), lit(","), col("month")))
+#Dołączenie danych o filmach, usunięcie zbędnych kolumn
+win = win.join(movies, movies.ID == win.film_id)
 win = win.drop("window", "ID", "Year")
+```
 
+## Utrzymanie obrazu czasu rzeczywistego – tryb A
+```python
 #Zapis do Redisa
 query = win.writeStream \
-.outputMode("update") \
+.outputMode("complete") \
 .foreachBatch (
     lambda batchDF, _:
     batchDF.write
-        .mode("append") \
+        .mode("overwrite") \
         .format("org.apache.spark.sql.redis") \
         .option("table", "result") \
-        .option("key.column", "key") \
+        .option("key.column", "film_id") \
+        .option("checkpointLocation", "/tmp/realtime_checkpoints") \
         .option("host", host_name) \
         .save()
 ) \
@@ -84,39 +85,22 @@ query = win.writeStream \
 ```
 
 ## Utrzymanie obrazu czasu rzeczywistego – tryb C
-Wczytywanie danych analogicznie jak w trybie A
 ```python
-#Wyliczenie agregat
-win = data.withWatermark("date", "30 days") \
-    .groupBy(
-        window("date", "30 days"), data.film_id) \
-        .agg(count("rate").alias("rate_count"),
-        sum("rate").alias("rate_sum"),
-        approx_count_distinct("user_id").alias("user_count")
-    )
-win = win.withColumn("month", date_format(win.window.end, "MM.yyyy"))
-
-#Dołączenie danych o filmach, wyznaczenie kolumny klucza dla Redisa
-win = win.join(movies, movies.ID == win.film_id) \
-.withColumnRenamed("Title", "title") \
-.withColumn("key", concat(col("film_id"), lit(","), col("month")))
-win = win.drop("window", "ID", "Year")
-
 #Zapis do Redisa
 query = win.writeStream \
 .outputMode("append") \
 .foreachBatch (
     lambda batchDF, _:
     batchDF.write
-        .mode("append") \
+        .mode("overwrite") \
         .format("org.apache.spark.sql.redis") \
         .option("table", "result") \
-        .option("key.column", "key") \
+        .option("key.column", "film_id") \
+        .option("checkpointLocation", "/tmp/realtime_checkpoints") \
         .option("host", host_name) \
         .save()
 ) \
 .start()
-
 ```
 
 ## Wykrywanie anomalii
@@ -145,7 +129,7 @@ data = data.withColumn("date", to_timestamp(split_columns[0], "yyyy-MM-dd")) \
 data = data.drop("value")
 
 #Wyznaczenie wartości zagregowanych dla okna o zadanym rozmiarze
-anomalies_window = data.withWatermark("date", f"{anomaly_window_length} days") \
+anomalies_window = data.withWatermark("date", "1 day") \
 .groupBy(window("date", f"{anomaly_window_length} days", "1 day"), data.film_id) \
 .agg(
     count("rate").alias("rate_count"),
@@ -155,28 +139,28 @@ anomalies_window = data.withWatermark("date", f"{anomaly_window_length} days") \
     col("rate_count"),
     date_format(col("window").start, "dd.MM.yyyy").alias("window_start"),
     date_format(col("window").end, "dd.MM.yyyy").alias("window_end"),
-    (col("rate_sum") / col("rate_count")).alias("avg_rate"),
-    col("rate_count")
+    (col("rate_sum") / col("rate_count")).alias("avg_rate")
 )
 
 #Sprawdzenie warunków wystąpienia anomalii, dołączenie danych o filmach
 anomalies = anomalies_window.where(
-    (anomalies_window.rate_count > anomaly_min_rate_count) &
-    (anomalies_window.avg_rate > anomaly_min_avg_rate)
-).join(movies, movies.ID == anomalies_window.film_id) \
+    (anomalies_window.rate_count >= anomaly_min_rate_count) &
+    (anomalies_window.avg_rate >= anomaly_min_avg_rate)
+) \
+.join(movies, movies.ID == anomalies_window.film_id) \
 .drop("ID", "Year", "film_id")
 
 #Formatowanie wyniku dla wyjścia w Kafce
 anomalies_formatted = anomalies.select(concat(
-    col("window_start"),
-    lit(","),
-    col("window_end"),
-    lit(","),
     col("Title"),
     lit(","),
     col("rate_count"),
     lit(","),
     col("avg_rate"),
+    lit(","),
+    col("window_start"),
+    lit(","),
+    col("window_end")
 ).alias("value"))
 
 #Zapis wyniku do tematu Kafki
@@ -184,7 +168,8 @@ anomalies_output = anomalies_formatted.writeStream \
 .format("kafka") \
 .option("kafka.bootstrap.servers", f"{host_name}:9092") \
 .option("topic", "prj-2-anomalies") \
-.option("checkpointLocation", "/tmp/anomaly_checkpoints/") \
+.option("checkpointLocation", "/tmp/anomaly_checkpoints") \
+.outputMode("append") \
 .start()
 ```
 
@@ -210,7 +195,7 @@ Warianty uruchomienia prztwarzania:
 Miejsce utrzymywania obrazów czasu rzeczywistego jest tworzone przez skrypt `setup.sh`. Nie trzeba uruchamiać go ponownie.
 
 ## Miejsce utrzymywania obrazów czasu rzeczywistego – cechy
-Redis jest bazą danych typu klucz wartość, która wspiera drobnoziarnistą aktualizację (próba zapisu wartości dla istniejącego klucza powoduje nadipsanie jego aktualnej wartości). W przypadku przetwarzania strumieni danych istotną zaletą jest wysoka szybkość działania, a także możliwość łatwego rozproszenia i zwiększania liczby węzłów przechowujących dane. W projekcie wykorzystano tylko jeden węzeł, ale obsługa większej liczby nie wymaga zmian w kodzie aplikacji.
+Do przechowywania obrazów czasu rzeczywistego wybrano bazę Redis. Jest to baza danych typu klucz wartość, która wspiera drobnoziarnistą aktualizację (próba zapisu wartości dla istniejącego klucza powoduje nadipsanie jego aktualnej wartości). W przypadku przetwarzania strumieni danych istotną zaletą jest wysoka szybkość działania, a także możliwość łatwego rozproszenia i zwiększania liczby węzłów przechowujących dane. W projekcie wykorzystano tylko jeden węzeł, ale obsługa większej liczby nie wymaga zmian w kodzie aplikacji.
 
 ## Konsument: skrypt odczytujący wyniki przetwarzania
 #### Obrazy czasu rzeczywstego
@@ -226,4 +211,4 @@ Przykładowy wynik wykrywania anomalii:
 ![](img/anomaly_result.png)
 
 ## Czyszczenie i ponowne uruchomienie projektu
-Przed ponownym uruchomieniem projektu po jego zatrzymaniu należy uruchomić skrypt `reset.sh`. Można rónież użyć `setup.sh`, ale `reset` nie pobiera ponowanie danych wejściowych, bibliotek sparka i nie instaluje klienta Redisa, w związku z czym jest dużo szybszy.
+Przed ponownym uruchomieniem projektu po jego zatrzymaniu należy uruchomić skrypt `reset.sh`. Można rónież użyć `setup.sh`, ale `reset` nie pobiera ponowanie danych wejściowych, bibliotek sparka i nie instaluje klienta Redisa, w związku z czym jest dużo szybszy. Przed uruchomieniem `reset` lub `setup` należy wyłączyć wszystkie programy operujące na tematach Kafki - w przeciwnym razie temat może nie zostać usunięty poprawnie i istnieje ryzyko że zastaną w nim jakieś dane.

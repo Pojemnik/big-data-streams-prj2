@@ -63,8 +63,7 @@ def detect_anomalies(data: DataFrame, movies: DataFrame, anomaly_window_length: 
         col("rate_count"),
         date_format(col("window").start, "dd.MM.yyyy").alias("window_start"),
         date_format(col("window").end, "dd.MM.yyyy").alias("window_end"),
-        (col("rate_sum") / col("rate_count")).alias("avg_rate"),
-        col("rate_count")
+        (col("rate_sum") / col("rate_count")).alias("avg_rate")
     )
 
     #Check anomaly conditions
@@ -77,15 +76,15 @@ def detect_anomalies(data: DataFrame, movies: DataFrame, anomaly_window_length: 
 
     #Format results for Kafka output
     anomalies_formatted = anomalies.select(concat(
-        col("window_start"),
-        lit(","),
-        col("window_end"),
-        lit(","),
         col("Title"),
         lit(","),
         col("rate_count"),
         lit(","),
         col("avg_rate"),
+        lit(","),
+        col("window_start"),
+        lit(","),
+        col("window_end")
     ).alias("value"))
 
     #Write output to Kafka
