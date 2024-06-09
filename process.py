@@ -20,11 +20,11 @@ def process_realtime_data(data: DataFrame, movies: DataFrame, host_name: str, mo
     if mode == 'a':
         #Realtime mode A
         query = win.writeStream \
-        .outputMode("update") \
+        .outputMode("complete") \
         .foreachBatch (
             lambda batchDF, _:
             batchDF.write
-                .mode("append") \
+                .mode("overwrite") \
                 .format("org.apache.spark.sql.redis") \
                 .option("table", "result") \
                 .option("key.column", "film_id") \
