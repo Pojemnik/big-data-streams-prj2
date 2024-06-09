@@ -8,8 +8,9 @@ from pyspark.sql import DataFrame
 def process_realtime_data(data: DataFrame, movies: DataFrame, host_name: str, mode: str):
     if mode == 'a':
         #Realtime mode A
-        win = data.groupBy(
-            window("date", "30 days"), data.film_id) \
+        win = data.\
+            groupBy(
+                window("date", "30 days"), data.film_id) \
             .agg(
                 count("rate").alias("rate_count"),
                 sum("rate").alias("rate_sum"),
@@ -38,17 +39,17 @@ def process_realtime_data(data: DataFrame, movies: DataFrame, host_name: str, mo
     
     elif mode == 'c':
         #Realtime mode C
-        win = data.withWatermark("date", "30 days") \
+        win = data.withWatermark("date", "1 day") \
             .groupBy(
                 window("date", "30 days"), data.film_id) \
-                .agg(count("rate").alias("rate_count"),
+            .agg(
+                count("rate").alias("rate_count"),
                 sum("rate").alias("rate_sum"),
                 approx_count_distinct("user_id").alias("user_count")
             )
-        win = win.withColumn("month", date_format(win.window.end, "MM.yyyy"))
         win = win.join(movies, movies.ID == win.film_id) \
         .withColumnRenamed("Title", "title") \
-        .withColumn("key", concat(col("film_id"), lit(","), col("month")))
+        .withColumn("key", col("film_id"))
         win = win.drop("window", "ID", "Year")
 
         #Write to Redis
@@ -57,10 +58,11 @@ def process_realtime_data(data: DataFrame, movies: DataFrame, host_name: str, mo
         .foreachBatch (
             lambda batchDF, _:
             batchDF.write
-                .mode("append") \
+                .mode("overwrite") \
                 .format("org.apache.spark.sql.redis") \
                 .option("table", "result") \
                 .option("key.column", "key") \
+                .option("checkpointLocation", "/tmp/realtime_checkpoints") \
                 .option("host", host_name) \
                 .save()
         ) \
@@ -104,7 +106,7 @@ def detect_anomalies(data: DataFrame, movies: DataFrame, anomaly_window_length: 
     .format("kafka") \
     .option("kafka.bootstrap.servers", f"{host_name}:9092") \
     .option("topic", "prj-2-anomalies") \
-    .option("checkpointLocation", "/tmp/anomaly_checkpoints/") \
+    .option("checkpointLocation", "/tmp/anomaly_checkpoints") \
     .outputMode("append") \
     .start()
 
