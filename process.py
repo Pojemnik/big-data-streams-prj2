@@ -6,23 +6,19 @@ from pyspark.sql.types import IntegerType
 from pyspark.sql import DataFrame
 
 def process_realtime_data(data: DataFrame, movies: DataFrame, host_name: str, mode: str):
+    win = data.withWatermark("date", "1 day") \
+    .groupBy(
+        window("date", "30 days"), data.film_id) \
+    .agg(
+        count("rate").alias("rate_count"),
+        sum("rate").alias("rate_sum"),
+        approx_count_distinct("user_id").alias("user_count")
+    )
+    win = win.join(movies, movies.ID == win.film_id)
+    win = win.drop("window", "ID", "Year")
+
     if mode == 'a':
         #Realtime mode A
-        win = data.\
-            groupBy(
-                window("date", "30 days"), data.film_id) \
-            .agg(
-                count("rate").alias("rate_count"),
-                sum("rate").alias("rate_sum"),
-                approx_count_distinct("user_id").alias("user_count")
-            )
-        win = win.withColumn("month", date_format(win.window.end, "MM.yyyy"))
-        win = win.join(movies, movies.ID == win.film_id) \
-        .withColumnRenamed("Title", "title") \
-        .withColumn("key", concat(col("film_id"), lit(","), col("month")))
-        win = win.drop("window", "ID", "Year")
-
-        #Write to Redis
         query = win.writeStream \
         .outputMode("update") \
         .foreachBatch (
@@ -31,7 +27,8 @@ def process_realtime_data(data: DataFrame, movies: DataFrame, host_name: str, mo
                 .mode("append") \
                 .format("org.apache.spark.sql.redis") \
                 .option("table", "result") \
-                .option("key.column", "key") \
+                .option("key.column", "film_id") \
+                .option("checkpointLocation", "/tmp/realtime_checkpoints") \
                 .option("host", host_name) \
                 .save()
         ) \
@@ -39,20 +36,6 @@ def process_realtime_data(data: DataFrame, movies: DataFrame, host_name: str, mo
     
     elif mode == 'c':
         #Realtime mode C
-        win = data.withWatermark("date", "1 day") \
-            .groupBy(
-                window("date", "30 days"), data.film_id) \
-            .agg(
-                count("rate").alias("rate_count"),
-                sum("rate").alias("rate_sum"),
-                approx_count_distinct("user_id").alias("user_count")
-            )
-        win = win.join(movies, movies.ID == win.film_id) \
-        .withColumnRenamed("Title", "title") \
-        .withColumn("key", col("film_id"))
-        win = win.drop("window", "ID", "Year")
-
-        #Write to Redis
         query = win.writeStream \
         .outputMode("append") \
         .foreachBatch (
@@ -61,7 +44,7 @@ def process_realtime_data(data: DataFrame, movies: DataFrame, host_name: str, mo
                 .mode("overwrite") \
                 .format("org.apache.spark.sql.redis") \
                 .option("table", "result") \
-                .option("key.column", "key") \
+                .option("key.column", "film_id") \
                 .option("checkpointLocation", "/tmp/realtime_checkpoints") \
                 .option("host", host_name) \
                 .save()
@@ -69,6 +52,7 @@ def process_realtime_data(data: DataFrame, movies: DataFrame, host_name: str, mo
         .start()
 
 def detect_anomalies(data: DataFrame, movies: DataFrame, anomaly_window_length: int, anomaly_min_rate_count: int, anomaly_min_avg_rate: int, host_name: str):
+    #Calculate aggregated values
     anomalies_window = data.withWatermark("date", "1 day") \
     .groupBy(window("date", f"{anomaly_window_length} days", "1 day"), data.film_id) \
     .agg(
@@ -83,10 +67,12 @@ def detect_anomalies(data: DataFrame, movies: DataFrame, anomaly_window_length: 
         col("rate_count")
     )
 
+    #Check anomaly conditions
     anomalies = anomalies_window.where(
         (anomalies_window.rate_count >= anomaly_min_rate_count) &
         (anomalies_window.avg_rate >= anomaly_min_avg_rate)
-    ).join(movies, movies.ID == anomalies_window.film_id) \
+    ) \
+    .join(movies, movies.ID == anomalies_window.film_id) \
     .drop("ID", "Year", "film_id")
 
     #Format results for Kafka output
@@ -102,6 +88,7 @@ def detect_anomalies(data: DataFrame, movies: DataFrame, anomaly_window_length: 
         col("avg_rate"),
     ).alias("value"))
 
+    #Write output to Kafka
     anomalies_output = anomalies_formatted.writeStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", f"{host_name}:9092") \
@@ -112,6 +99,7 @@ def detect_anomalies(data: DataFrame, movies: DataFrame, anomaly_window_length: 
 
 
 def main():
+    #Handle input parameters
     if len(sys.argv) < 5:
         print("Not enough arguments")
         return
@@ -121,12 +109,13 @@ def main():
     anomaly_min_avg_rate = int(sys.argv[4])
     print(f"Arguments: {mode}, {anomaly_window_length}, {anomaly_min_rate_count}, {anomaly_min_avg_rate}")
 
+    #Create Spark sesion
     spark = SparkSession.builder \
     .appName("BigData Netflix") \
     .getOrCreate()
-    host_name = socket.gethostname()
 
-    #Load data
+    #Create data sources
+    host_name = socket.gethostname()
     source = spark.readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", f"{host_name}:9092") \
@@ -148,10 +137,10 @@ def main():
     data = data.drop("value")
 
     process_realtime_data(data, movies, host_name, mode)
-
     detect_anomalies(data, movies, anomaly_window_length, anomaly_min_rate_count, anomaly_min_avg_rate, host_name)
 
     spark.streams.awaitAnyTermination()
+
 
 if __name__ == "__main__":
     main()
